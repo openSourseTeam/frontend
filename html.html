@@ -736,12 +736,12 @@
 
             // 为每个维度创建进度条
             const dimensionItems = Object.entries(analysis.dimension_scores || {}).map(([dimension, score]) => {
-                const percentage = Math.min(score * 10, 100); // 假设分数是0-10
+                const percentage = Math.min(score, 100); // 假设分数是0-10
                 return `
                     <div class="dimension-item">
                         <div class="dimension-header">
                             <span class="dimension-name">${dimension}</span>
-                            <span class="dimension-score">${score}/10</span>
+                            <span class="dimension-score">${score}/100</span>
                         </div>
                         <div class="dimension-bar">
                             <div class="dimension-progress" style="width: ${percentage}%"></div>
