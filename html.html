@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <script src="marked.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub README 下载器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+            position: relative;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="1"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+        }
+
+        .header h1 {
+            font-size: 2.8em;
+            margin-bottom: 15px;
+            font-weight: 700;
+            position: relative;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.2em;
+            font-weight: 300;
+            position: relative;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .input-group {
+            margin-bottom: 30px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 12px;
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 1.1em;
+        }
+
+        .url-input {
+            width: 100%;
+            padding: 18px 25px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            background: #f8f9fa;
+        }
+
+        .url-input:focus {
+            outline: none;
+            border-color: #3498db;
+            background: white;
+            box-shadow: 0 0 0 4px rgba(52, 152, 219, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            border: none;
+            padding: 18px 30px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn:hover::before {
+            left: 100%;
+        }
+
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 30px rgba(52, 152, 219, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(-1px);
+        }
+
+        .btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
+            width: auto;
+            padding: 12px 25px;
+            margin: 10px 5px;
+        }
+
+        .btn-secondary:hover {
+            box-shadow: 0 10px 25px rgba(149, 165, 166, 0.3);
+        }
+
+        .result {
+            margin-top: 30px;
+            display: none;
+        }
+
+        .success {
+            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 25px;
+            border-left: 5px solid #28a745;
+        }
+
+        .error {
+            background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 25px;
+            border-left: 5px solid #dc3545;
+        }
+
+        .repo-info {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+            border: 1px solid #e9ecef;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+        }
+
+        .repo-info h3 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.4em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+        }
+
+        .info-item {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            border-left: 4px solid #3498db;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+        }
+
+        .info-label {
+            font-weight: 600;
+            color: #7f8c8d;
+            font-size: 0.85em;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .info-value {
+            color: #2c3e50;
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+
+        .content-preview {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            max-height: 500px;
+            overflow-y: auto;
+            border: 1px solid #e9ecef;
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .content-preview pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'Courier New', monospace;
+            line-height: 1.6;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            display: none;
+        }
+
+        .spinner {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .examples {
+            margin-top: 20px;
+            font-size: 0.9em;
+            color: #7f8c8d;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            border-left: 4px solid #3498db;
+        }
+
+        .examples ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .examples li {
+            margin-bottom: 8px;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .examples li::before {
+            content: '•';
+            color: #3498db;
+            font-weight: bold;
+            position: absolute;
+            left: 0;
+        }
+
+        .examples code {
+            background: #e9ecef;
+            padding: 3px 8px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        /* 分析结果样式 */
+        .analysis-section {
+            background: white;
+            border-radius: 15px;
+            padding: 0;
+            margin-bottom: 25px;
+            border: 1px solid #e9ecef;
+            overflow: hidden;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .analysis-header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 25px;
+            text-align: center;
+        }
+
+        .analysis-header h3 {
+            margin: 0;
+            font-size: 1.6em;
+            font-weight: 700;
+        }
+
+        .analysis-content {
+            padding: 30px;
+        }
+
+        .score-display {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 25px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 12px;
+            border: 2px dashed #dee2e6;
+        }
+
+        .overall-score {
+            font-size: 4em;
+            font-weight: 800;
+            color: #2c3e50;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .score-label {
+            font-size: 1.2em;
+            color: #7f8c8d;
+            font-weight: 600;
+        }
+
+        .dimensions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .dimension-item {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #e9ecef;
+            box-shadow: 0 3px 15px rgba(0, 0, 0, 0.08);
+            transition: transform 0.3s ease;
+        }
+
+        .dimension-item:hover {
+            transform: translateY(-5px);
+        }
+
+        .dimension-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .dimension-name {
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 1.1em;
+        }
+
+        .dimension-score {
+            font-weight: 700;
+            font-size: 1.3em;
+            padding: 5px 12px;
+            border-radius: 20px;
+            background: #3498db;
+            color: white;
+        }
+
+        .dimension-bar {
+            height: 8px;
+            background: #ecf0f1;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .dimension-progress {
+            height: 100%;
+            background: linear-gradient(90deg, #3498db, #2980b9);
+            border-radius: 4px;
+            transition: width 1s ease-in-out;
+        }
+
+        .strengths-section,
+        .recommendations-section {
+            margin-bottom: 25px;
+        }
+
+        .section-title {
+            font-size: 1.3em;
+            color: #2c3e50;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #3498db;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .strength-list,
+        .recommendation-list {
+            display: grid;
+            gap: 15px;
+        }
+
+        .strength-item,
+        .recommendation-item {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 4px solid #27ae60;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+        }
+
+        .recommendation-item {
+            border-left-color: #e74c3c;
+        }
+
+        .icon {
+            width: 24px;
+            height: 24px;
+            flex-shrink: 0;
+            background: #27ae60;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        .recommendation-item .icon {
+            background: #e74c3c;
+        }
+
+        .item-content {
+            flex: 1;
+        }
+
+        .item-title {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .item-description {
+            color: #7f8c8d;
+            line-height: 1.5;
+        }
+
+        .analysis-actions {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 25px;
+            border-top: 1px solid #e9ecef;
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 15px;
+            }
+
+            .header {
+                padding: 30px 20px;
+            }
+
+            .header h1 {
+                font-size: 2.2em;
+            }
+
+            .content {
+                padding: 25px;
+            }
+
+            .dimensions-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* 滚动条样式 */
+        .content-preview::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .content-preview::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+
+        .content-preview::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+
+        .content-preview::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📖 GitHub README 分析器</h1>
+            <p>深度分析 GitHub 仓库的 README 文档质量</p>
+        </div>
+
+        <div class="content">
+            <div class="input-group">
+                <label for="repoUrl">GitHub 仓库地址：</label>
+                <input type="text" id="repoUrl" class="url-input"
+                    placeholder="例如：https://github.com/vuejs/vue 或 vuejs/vue" value="">
+                <div class="examples">
+                    <p>支持多种格式输入：</p>
+                    <ul>
+                        <li>完整URL: <code>https://github.com/username/reponame</code></li>
+                        <li>简写URL: <code>github.com/username/reponame</code></li>
+                        <li>直接输入: <code>username/reponame</code></li>
+                    </ul>
+                </div>
+            </div>
+
+            <button id="downloadBtn" class="btn">
+                <span>🚀 下载并分析 README</span>
+            </button>
+
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>正在获取仓库信息，请稍候...</p>
+            </div>
+
+            <div class="result" id="result">
+                <!-- 结果将动态填充在这里 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('downloadBtn').addEventListener('click', downloadReadme);
+        document.getElementById('repoUrl').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                downloadReadme();
+            }
+        });
+
+        async function downloadReadme() {
+            const repoUrl = document.getElementById('repoUrl').value.trim();
+            const downloadBtn = document.getElementById('downloadBtn');
+            const loading = document.getElementById('loading');
+            const resultDiv = document.getElementById('result');
+
+            if (!repoUrl) {
+                showError('请输入GitHub仓库地址');
+                return;
+            }
+
+            // 标准化URL输入
+            let processedUrl = repoUrl;
+            if (!processedUrl.includes('github.com') && !processedUrl.includes('/')) {
+                processedUrl = 'https://github.com/' + processedUrl;
+            } else if (!processedUrl.startsWith('http') && processedUrl.includes('github.com')) {
+                processedUrl = 'https://' + processedUrl;
+            }
+
+            // 显示加载状态
+            downloadBtn.disabled = true;
+            downloadBtn.innerHTML = '<span>⏳ 下载中...</span>';
+            loading.style.display = 'block';
+            resultDiv.style.display = 'none';
+
+            try {
+                const response = await fetch('http://0.0.0.0:8000/api/download-readme', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        repo_url: processedUrl
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showSuccess(data);
+                } else {
+                    showError(data.error || '下载失败，请检查仓库地址是否正确');
+                }
+
+            } catch (error) {
+                showError('网络请求失败: ' + error.message);
+            } finally {
+                // 恢复按钮状态
+                downloadBtn.disabled = false;
+                downloadBtn.innerHTML = '<span>🚀 下载并分析 README</span>';
+                loading.style.display = 'none';
+            }
+        }
+
+        function showSuccess(data) {
+            const resultDiv = document.getElementById('result');
+
+            const repoInfo = data.repo_info;
+            const readmeInfo = data.readme_info;
+
+            // 使用 marked.js 渲染 Markdown
+            const markdownContent = marked.parse(data.content);
+
+            resultDiv.innerHTML = `
+                <div class="success">
+                    <h3>✅ README 下载成功！</h3>
+                    <p>成功从仓库 <strong>${repoInfo.full_name}</strong> 下载了 README 文件</p>
+                </div>
+                
+                <div class="repo-info">
+                    <h3>📊 仓库信息</h3>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <span class="info-label">仓库名称</span>
+                            <span class="info-value">${repoInfo.full_name}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">描述</span>
+                            <span class="info-value">${repoInfo.description || '无描述'}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">⭐ Stars</span>
+                            <span class="info-value">${repoInfo.stars.toLocaleString()}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">🍴 Forks</span>
+                            <span class="info-value">${repoInfo.forks.toLocaleString()}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">📄 README 文件</span>
+                            <span class="info-value">${readmeInfo.filename}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">📏 文件大小</span>
+                            <span class="info-value">${(readmeInfo.size / 1024).toFixed(2)} KB</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="repo-info">
+                    <h3>📝 README 内容预览</h3>
+                    <div class="content-preview">
+                        ${markdownContent}
+                    </div>
+                </div>
+                
+                <div class="analysis-actions">
+                    <button class="btn btn-secondary" onclick="analyzeReadme('${repoInfo.full_name}', '${btoa(unescape(encodeURIComponent(data.content)))}')">
+                        🔍 开始深度分析
+                    </button>
+                </div>
+            `;
+
+            resultDiv.style.display = 'block';
+        }
+
+        async function analyzeReadme(repoName, encodedContent) {
+            const resultDiv = document.getElementById('result');
+            const content = decodeURIComponent(escape(atob(encodedContent)));
+
+            // 显示分析加载状态
+            const analyzeBtn = resultDiv.querySelector('.btn-secondary');
+            analyzeBtn.disabled = true;
+            analyzeBtn.innerHTML = '⏳ 分析中...';
+
+            try {
+                const response = await fetch('http://0.0.0.0:8000/api/analyze-readme', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        repo_name: repoName,
+                        content: content
+                    })
+                });
+
+                const analysis = await response.json();
+                showAnalysisResults(analysis);
+
+            } catch (error) {
+                alert('分析失败: ' + error.message);
+                analyzeBtn.disabled = false;
+                analyzeBtn.innerHTML = '🔍 开始深度分析';
+            }
+        }
+
+        function showAnalysisResults(analysis) {
+            const resultDiv = document.getElementById('result');
+
+            // 为每个维度创建进度条
+            const dimensionItems = Object.entries(analysis.dimension_scores || {}).map(([dimension, score]) => {
+                const percentage = Math.min(score * 10, 100); // 假设分数是0-10
+                return `
+                    <div class="dimension-item">
+                        <div class="dimension-header">
+                            <span class="dimension-name">${dimension}</span>
+                            <span class="dimension-score">${score}/10</span>
+                        </div>
+                        <div class="dimension-bar">
+                            <div class="dimension-progress" style="width: ${percentage}%"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // 创建优点列表
+            const strengthItems = (analysis.strengths || []).map((strength, index) => `
+                <div class="strength-item">
+                    <div class="icon">✓</div>
+                    <div class="item-content">
+                        <div class="item-title">优势 ${index + 1}</div>
+                        <div class="item-description">${strength}</div>
+                    </div>
+                </div>
+            `).join('');
+
+            // 创建改进建议列表
+            const recommendationItems = (analysis.priority_recommendations || []).map((rec, index) => `
+                <div class="recommendation-item">
+                    <div class="icon">!</div>
+                    <div class="item-content">
+                        <div class="item-title">建议 ${index + 1}</div>
+                        <div class="item-description">${rec}</div>
+                    </div>
+                </div>
+            `).join('');
+
+            const analysisHTML = `
+                <div class="analysis-section">
+                    <div class="analysis-header">
+                        <h3>📊 README 深度分析报告</h3>
+                    </div>
+                    <div class="analysis-content">
+                        <div class="score-display">
+                            <div class="overall-score">${analysis.overall_score || 'N/A'}</div>
+                            <div class="score-label">综合评分 (满分10分)</div>
+                        </div>
+
+                        <div class="section-title">📈 维度评分</div>
+                        <div class="dimensions-grid">
+                            ${dimensionItems}
+                        </div>
+
+                        <div class="strengths-section">
+                            <div class="section-title">✅ 文档优点</div>
+                            <div class="strength-list">
+                                ${strengthItems || '<p>暂无优点数据</p>'}
+                            </div>
+                        </div>
+
+                        <div class="recommendations-section">
+                            <div class="section-title">💡 改进建议</div>
+                            <div class="recommendation-list">
+                                ${recommendationItems || '<p>暂无改进建议</p>'}
+                            </div>
+                        </div>
+
+                        <div class="analysis-actions">
+                            <button class="btn btn-secondary" onclick="location.reload()">
+                                🔄 分析新仓库
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // 在现有内容后添加分析结果
+            resultDiv.innerHTML += analysisHTML;
+
+            // 添加动画效果
+            setTimeout(() => {
+                const progressBars = document.querySelectorAll('.dimension-progress');
+                progressBars.forEach(bar => {
+                    const width = bar.style.width;
+                    bar.style.width = '0';
+                    setTimeout(() => {
+                        bar.style.width = width;
+                    }, 100);
+                });
+            }, 500);
+        }
+
+        function showError(message) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = `
+                <div class="error">
+                    <h3>❌ 下载失败</h3>
+                    <p>${message}</p>
+                    <p style="margin-top: 10px; font-size: 0.9em;">请检查：</p>
+                    <ul style="margin-top: 5px; padding-left: 20px;">
+                        <li>仓库地址是否正确</li>
+                        <li>仓库是否为公开仓库</li>
+                        <li>网络连接是否正常</li>
+                    </ul>
+                </div>
+            `;
+            resultDiv.style.display = 'block';
+        }
+    </script>
+</body>
+
+</html>
