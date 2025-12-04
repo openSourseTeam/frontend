@@ -710,19 +710,31 @@
             analyzeBtn.innerHTML = '⏳ 分析中...';
 
             try {
-                const response = await fetch('http://0.0.0.0:8000/api/analyze-readme', {
+                // 调用 `/api/analyze-readme-init` 接口
+                const readabilityResponse = await fetch('http://0.0.0.0:8000/api/analyze-readme-init', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ content }),
+                });
+                const readabilityData = await readabilityResponse.json();
+
+                // 调用 `/api/analyze-readme` 接口
+                const analysisResponse = await fetch('http://0.0.0.0:8000/api/analyze-readme', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
                         repo_name: repoName,
-                        content: content
-                    })
+                        content: content,
+                    }),
                 });
+                const analysis = await analysisResponse.json();
 
-                const analysis = await response.json();
-                showAnalysisResults(analysis);
+                // 显示分析结果
+                showAnalysisResults(analysis, readabilityData);
 
             } catch (error) {
                 alert('分析失败: ' + error.message);
@@ -731,87 +743,142 @@
             }
         }
 
-        function showAnalysisResults(analysis) {
+        function showAnalysisResults(analysis, readabilityData) {
             const resultDiv = document.getElementById('result');
 
-            // 为每个维度创建进度条
-            const dimensionItems = Object.entries(analysis.dimension_scores || {}).map(([dimension, score]) => {
-                const percentage = Math.min(score, 100); // 假设分数是0-10
-                return `
-                    <div class="dimension-item">
-                        <div class="dimension-header">
-                            <span class="dimension-name">${dimension}</span>
-                            <span class="dimension-score">${score}/100</span>
-                        </div>
-                        <div class="dimension-bar">
-                            <div class="dimension-progress" style="width: ${percentage}%"></div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
+            // 可读性指标部分
+            const readabilityItems = Object.entries(readabilityData || {}).map(([key, value]) => `
+        <div class="info-item">
+            <span class="info-label">${key.replace(/_/g, ' ')}</span>
+            <span class="info-value">${typeof value === 'number' ? value.toFixed(2) : value}</span>
+        </div>
+    `).join('');
 
-            // 创建优点列表
-            const strengthItems = (analysis.strengths || []).map((strength, index) => `
-                <div class="strength-item">
-                    <div class="icon">✓</div>
-                    <div class="item-content">
-                        <div class="item-title">优势 ${index + 1}</div>
-                        <div class="item-description">${strength}</div>
-                    </div>
-                </div>
-            `).join('');
+            // 其他分析结果（维度评分、优点、建议等）
+            const dimensionItems = Object.entries(analysis.dimension_scores || {}).map(([dimension, score]) => `
+        <div class="dimension-item">
+            <div class="dimension-header">
+                <span class="dimension-name">${dimension}</span>
+                <span class="dimension-score">${score}/100</span>
+            </div>
+            <div class="dimension-bar">
+                <div class="dimension-progress" style="width: ${Math.min(score, 100)}%"></div>
+            </div>
+        </div>
+    `).join('');
 
-            // 创建改进建议列表
-            const recommendationItems = (analysis.priority_recommendations || []).map((rec, index) => `
-                <div class="recommendation-item">
-                    <div class="icon">!</div>
-                    <div class="item-content">
-                        <div class="item-title">建议 ${index + 1}</div>
-                        <div class="item-description">${rec}</div>
-                    </div>
-                </div>
-            `).join('');
+            const strengths = (analysis.strengths || []).map((strength, index) => `
+        <li>优势 ${index + 1}: ${strength}</li>
+    `).join('');
+
+            const missingSections = (analysis.missing_sections || []).map((section, index) => `
+        <li>缺失部分 ${index + 1}: ${section}</li>
+    `).join('');
+
+            const beginnerConfusionPoints = (analysis.beginner_confusion_points || []).map((point, index) => `
+        <li>新手困惑点 ${index + 1}: ${point}</li>
+    `).join('');
+
+            const codeQualityIssues = (analysis.code_quality_issues || []).map((issue, index) => `
+        <li>代码质量问题 ${index + 1}: ${issue}</li>
+    `).join('');
+
+            const structuralIssues = (analysis.structural_issues || []).map((issue, index) => `
+        <li>结构问题 ${index + 1}: ${issue}</li>
+    `).join('');
+
+            const languageIssues = (analysis.language_issues || []).map((issue, index) => `
+        <li>语言问题 ${index + 1}: ${issue}</li>
+    `).join('');
+
+            const priorityRecommendations = (analysis.priority_recommendations || []).map((rec, index) => `
+        <li>优先建议 ${index + 1}: ${rec}</li>
+    `).join('');
+
+            const suggestions = (analysis.suggestions || []).map((suggestion, index) => `
+        <li>建议 ${index + 1}: ${suggestion}</li>
+    `).join('');
+
+            const conventionIssues = (analysis.convention_issues || []).map((issue, index) => `
+        <li>约定问题 ${index + 1}: ${issue}</li>
+    `).join('');
 
             const analysisHTML = `
-                <div class="analysis-section">
-                    <div class="analysis-header">
-                        <h3>📊 README 深度分析报告</h3>
-                    </div>
-                    <div class="analysis-content">
-                        <div class="score-display">
-                            <div class="overall-score">${analysis.overall_score || 'N/A'}</div>
-                            <div class="score-label">综合评分 (满分100分)</div>
-                        </div>
-
-                        <div class="section-title">📈 维度评分</div>
-                        <div class="dimensions-grid">
-                            ${dimensionItems}
-                        </div>
-
-                        <div class="strengths-section">
-                            <div class="section-title">✅ 文档优点</div>
-                            <div class="strength-list">
-                                ${strengthItems || '<p>暂无优点数据</p>'}
-                            </div>
-                        </div>
-
-                        <div class="recommendations-section">
-                            <div class="section-title">💡 改进建议</div>
-                            <div class="recommendation-list">
-                                ${recommendationItems || '<p>暂无改进建议</p>'}
-                            </div>
-                        </div>
-
-                        <div class="analysis-actions">
-                            <button class="btn btn-secondary" onclick="location.reload()">
-                                🔄 分析新仓库
-                            </button>
-                        </div>
-                    </div>
+        <div class="analysis-section">
+            <div class="analysis-header">
+                <h3>📊 README 深度分析报告</h3>
+            </div>
+            <div class="analysis-content">
+                <div class="score-display">
+                    <div class="overall-score">${analysis.overall_score || 'N/A'}</div>
+                    <div class="score-label">综合评分 (满分100分)</div>
                 </div>
-            `;
 
-            // 在现有内容后添加分析结果
+                <div class="section-title">📈 维度评分</div>
+                <div class="dimensions-grid">
+                    ${dimensionItems}
+                </div>
+
+                <div class="section-title">📖 可读性指标</div>
+                <div class="info-grid">
+                    ${readabilityItems}
+                </div>
+
+                <div class="section-title">✅ 文档优点</div>
+                <ul>
+                    ${strengths || '<p>暂无优点数据</p>'}
+                </ul>
+
+                <div class="section-title">❌ 缺失部分</div>
+                <ul>
+                    ${missingSections || '<p>暂无缺失部分</p>'}
+                </ul>
+
+                <div class="section-title">🤔 新手困惑点</div>
+                <ul>
+                    ${beginnerConfusionPoints || '<p>暂无新手困惑点</p>'}
+                </ul>
+
+                <div class="section-title">🐞 代码质量问题</div>
+                <ul>
+                    ${codeQualityIssues || '<p>暂无代码质量问题</p>'}
+                </ul>
+
+                <div class="section-title">🏗️ 结构问题</div>
+                <ul>
+                    ${structuralIssues || '<p>暂无结构问题</p>'}
+                </ul>
+
+                <div class="section-title">📝 语言问题</div>
+                <ul>
+                    ${languageIssues || '<p>暂无语言问题</p>'}
+                </ul>
+
+                <div class="section-title">💡 优先建议</div>
+                <ul>
+                    ${priorityRecommendations || '<p>暂无优先建议</p>'}
+                </ul>
+
+                <div class="section-title">📌 其他建议</div>
+                <ul>
+                    ${suggestions || '<p>暂无其他建议</p>'}
+                </ul>
+
+                <div class="section-title">⚙️ 约定问题</div>
+                <ul>
+                    ${conventionIssues || '<p>暂无约定问题</p>'}
+                </ul>
+
+                <div class="analysis-actions">
+                    <button class="btn btn-secondary" onclick="location.reload()">
+                        🔄 分析新仓库
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+            // 更新结果区域
             resultDiv.innerHTML += analysisHTML;
 
             // 添加动画效果
