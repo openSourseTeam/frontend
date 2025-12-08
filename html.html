@@ -610,7 +610,7 @@
             resultDiv.style.display = 'none';
 
             try {
-                const response = await fetch('http://0.0.0.0:8000/api/download-readme', {
+                const response = await fetch('http://localhost:8000/api/download-readme', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -711,7 +711,7 @@
 
             try {
                 // 调用 `/api/analyze-readme-init` 接口
-                const readabilityResponse = await fetch('http://0.0.0.0:8000/api/analyze-readme-init', {
+                const readabilityResponse = await fetch('http://localhost:8000/api/analyze-readme-init', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -721,7 +721,7 @@
                 const readabilityData = await readabilityResponse.json();
 
                 // 调用 `/api/analyze-readme` 接口
-                const analysisResponse = await fetch('http://0.0.0.0:8000/api/analyze-readme', {
+                const analysisResponse = await fetch('http://localhost:8000/api/analyze-readme', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
