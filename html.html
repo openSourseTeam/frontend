@@ -577,14 +577,16 @@
     </div>
 
     <script>
-        document.getElementById('downloadBtn').addEventListener('click', downloadReadme);
+        document.getElementById('downloadBtn').addEventListener('click', scanRepo);
         document.getElementById('repoUrl').addEventListener('keypress', function (e) {
             if (e.key === 'Enter') {
-                downloadReadme();
+                scanRepo();
             }
         });
 
-        async function downloadReadme() {
+        let currentDocs = null; // Store fetched docs for analysis
+
+        async function scanRepo() {
             const repoUrl = document.getElementById('repoUrl').value.trim();
             const downloadBtn = document.getElementById('downloadBtn');
             const loading = document.getElementById('loading');
@@ -605,12 +607,12 @@
 
             // 显示加载状态
             downloadBtn.disabled = true;
-            downloadBtn.innerHTML = '<span>⏳ 下载中...</span>';
+            downloadBtn.innerHTML = '<span>⏳ 正在扫描仓库文档...</span>';
             loading.style.display = 'block';
             resultDiv.style.display = 'none';
 
             try {
-                const response = await fetch('http://localhost:8000/api/download-readme', {
+                const response = await fetch('http://localhost:8000/api/scan-repo', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -623,9 +625,10 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    showSuccess(data);
+                    currentDocs = data.docs; // Save for analysis step
+                    showScanResults(data);
                 } else {
-                    showError(data.error || '下载失败，请检查仓库地址是否正确');
+                    showError(data.error || '扫描失败，请检查仓库地址是否正确');
                 }
 
             } catch (error) {
@@ -633,265 +636,211 @@
             } finally {
                 // 恢复按钮状态
                 downloadBtn.disabled = false;
-                downloadBtn.innerHTML = '<span>🚀 下载并分析 README</span>';
+                downloadBtn.innerHTML = '<span>🚀 重新扫描</span>';
                 loading.style.display = 'none';
             }
         }
 
-        function showSuccess(data) {
+        function showScanResults(data) {
             const resultDiv = document.getElementById('result');
-
             const repoInfo = data.repo_info;
-            const readmeInfo = data.readme_info;
+            const docs = data.docs;
 
-            // 使用 marked.js 渲染 Markdown
-            const markdownContent = marked.parse(data.content);
+            // Generate docs list HTML
+            let docsHtml = '<div class="info-grid">';
+            let docCount = 0;
+
+            for (const [type, info] of Object.entries(docs)) {
+                if (info) {
+                    docCount++;
+                    docsHtml += `
+                        <div class="info-item">
+                            <span class="info-label">${type.toUpperCase()}</span>
+                            <span class="info-value">
+                                <a href="${info.html_url}" target="_blank">📄 ${info.filename}</a>
+                            </span>
+                            <div style="font-size: 0.8em; color: #7f8c8d; margin-top: 5px;">
+                                大小: ${(info.size / 1024).toFixed(2)} KB
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+            docsHtml += '</div>';
+
+            if (docCount === 0) {
+                docsHtml = '<div class="error"><p>⚠️ 未找到任何主要文档 (README, CONTRIBUTING, etc.)</p></div>';
+            }
 
             resultDiv.innerHTML = `
                 <div class="success">
-                    <h3>✅ README 下载成功！</h3>
-                    <p>成功从仓库 <strong>${repoInfo.full_name}</strong> 下载了 README 文件</p>
+                    <h3>✅ 扫描完成！</h3>
+                    <p>在仓库 <strong>${repoInfo.full_name}</strong> 中找到了 ${docCount} 个关键文档</p>
                 </div>
                 
                 <div class="repo-info">
-                    <h3>📊 仓库信息</h3>
-                    <div class="info-grid">
-                        <div class="info-item">
-                            <span class="info-label">仓库名称</span>
-                            <span class="info-value">${repoInfo.full_name}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">描述</span>
-                            <span class="info-value">${repoInfo.description || '无描述'}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">⭐ Stars</span>
-                            <span class="info-value">${repoInfo.stars.toLocaleString()}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">🍴 Forks</span>
-                            <span class="info-value">${repoInfo.forks.toLocaleString()}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">📄 README 文件</span>
-                            <span class="info-value">${readmeInfo.filename}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">📏 文件大小</span>
-                            <span class="info-value">${(readmeInfo.size / 1024).toFixed(2)} KB</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="repo-info">
-                    <h3>📝 README 内容预览</h3>
-                    <div class="content-preview">
-                        ${markdownContent}
-                    </div>
+                    <h3>📂 文档清单</h3>
+                    ${docsHtml}
                 </div>
                 
                 <div class="analysis-actions">
-                    <button class="btn btn-secondary" onclick="analyzeReadme('${repoInfo.full_name}', '${btoa(unescape(encodeURIComponent(data.content)))}')">
-                        🔍 开始深度分析
+                    <button class="btn btn-secondary" onclick="analyzeProject()">
+                        🔍 开始全面深度分析
                     </button>
+                    <p style="margin-top: 10px; color: #7f8c8d; font-size: 0.9em;">
+                        注意：深度分析可能需要 30-60 秒，请耐心等待 AI 思考...
+                    </p>
                 </div>
+                <div id="analysis-container"></div>
             `;
 
             resultDiv.style.display = 'block';
         }
 
-        async function analyzeReadme(repoName, encodedContent) {
-            const resultDiv = document.getElementById('result');
-            const content = decodeURIComponent(escape(atob(encodedContent)));
+        async function analyzeProject() {
+            if (!currentDocs) {
+                alert("请先扫描仓库");
+                return;
+            }
+
+            const analysisContainer = document.getElementById('analysis-container');
+            const analyzeBtn = document.querySelector('.analysis-actions .btn-secondary');
 
             // 显示分析加载状态
-            const analyzeBtn = resultDiv.querySelector('.btn-secondary');
             analyzeBtn.disabled = true;
-            analyzeBtn.innerHTML = '⏳ 分析中...';
+            analyzeBtn.innerHTML = '⏳ 正在进行全方位分析 (请稍候)...';
+            analysisContainer.innerHTML = '<div class="loading" style="display:block"><div class="spinner"></div><p>AI 正在阅读文档并进行评估...</p></div>';
 
             try {
-                // 调用 `/api/analyze-readme-init` 接口
-                const readabilityResponse = await fetch('http://localhost:8000/api/analyze-readme-init', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ content }),
-                });
-                const readabilityData = await readabilityResponse.json();
-
-                // 调用 `/api/analyze-readme` 接口
-                const analysisResponse = await fetch('http://localhost:8000/api/analyze-readme', {
+                const response = await fetch('http://localhost:8000/api/analyze-project', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        repo_name: repoName,
-                        content: content,
+                        docs: currentDocs
                     }),
                 });
-                const analysis = await analysisResponse.json();
+                const data = await response.json();
 
-                // 显示分析结果
-                showAnalysisResults(analysis, readabilityData);
+                if (data.success) {
+                    showAnalysisResults(data);
+                    analyzeBtn.innerHTML = '✅ 分析完成';
+                } else {
+                    analysisContainer.innerHTML = `<div class="error"><p>分析失败: ${data.error}</p></div>`;
+                    analyzeBtn.disabled = false;
+                    analyzeBtn.innerHTML = '🔍 重试分析';
+                }
 
             } catch (error) {
-                alert('分析失败: ' + error.message);
+                analysisContainer.innerHTML = `<div class="error"><p>请求失败: ${error.message}</p></div>`;
                 analyzeBtn.disabled = false;
-                analyzeBtn.innerHTML = '🔍 开始深度分析';
+                analyzeBtn.innerHTML = '🔍 重试分析';
             }
         }
 
-        function showAnalysisResults(analysis, readabilityData) {
-            const resultDiv = document.getElementById('result');
+        function showAnalysisResults(data) {
+            const analysisContainer = document.getElementById('analysis-container');
+            const analysis = data.ai_analysis;
+            const ruleChecks = data.rule_checks;
 
-            // 可读性指标部分
-            const readabilityItems = Object.entries(readabilityData || {}).map(([key, value]) => `
-        <div class="info-item">
-            <span class="info-label">${key.replace(/_/g, ' ')}</span>
-            <span class="info-value">${typeof value === 'number' ? value.toFixed(2) : value}</span>
-        </div>
-    `).join('');
+            // 规则检查概览
+            let ruleSummaryHtml = '<div class="repo-info"><h3>📏 规则检查概览</h3><div class="info-grid">';
+            for (const [type, result] of Object.entries(ruleChecks)) {
+                if (result && result.summary) {
+                    const statusIcon = result.summary.overall_passed ? '✅' : '⚠️';
+                    ruleSummaryHtml += `
+                        <div class="info-item">
+                            <span class="info-label">${type.toUpperCase()}</span>
+                            <span class="info-value">${statusIcon} ${result.summary.passed_checks}/${result.summary.total_checks} 通过</span>
+                            <div style="font-size: 0.85em; color: #e74c3c;">
+                                ${result.summary.total_issues > 0 ? `${result.summary.total_issues} 个问题` : ''}
+                            </div>
+                        </div>
+                     `;
+                }
+            }
+            ruleSummaryHtml += '</div></div>';
 
-            // 其他分析结果（维度评分、优点、建议等）
+            // AI 分析结果
+            const readabilityData = {}; // Placeholder if needed by legacy formatter
+
+            // 维度评分
             const dimensionItems = Object.entries(analysis.dimension_scores || {}).map(([dimension, score]) => `
-        <div class="dimension-item">
-            <div class="dimension-header">
-                <span class="dimension-name">${dimension}</span>
-                <span class="dimension-score">${score}/100</span>
-            </div>
-            <div class="dimension-bar">
-                <div class="dimension-progress" style="width: ${Math.min(score, 100)}%"></div>
-            </div>
-        </div>
-    `).join('');
-
-            const strengths = (analysis.strengths || []).map((strength, index) => `
-        <li>优势 ${index + 1}: ${strength}</li>
-    `).join('');
-
-            const missingSections = (analysis.missing_sections || []).map((section, index) => `
-        <li>缺失部分 ${index + 1}: ${section}</li>
-    `).join('');
-
-            const beginnerConfusionPoints = (analysis.beginner_confusion_points || []).map((point, index) => `
-        <li>新手困惑点 ${index + 1}: ${point}</li>
-    `).join('');
-
-            const codeQualityIssues = (analysis.code_quality_issues || []).map((issue, index) => `
-        <li>代码质量问题 ${index + 1}: ${issue}</li>
-    `).join('');
-
-            const structuralIssues = (analysis.structural_issues || []).map((issue, index) => `
-        <li>结构问题 ${index + 1}: ${issue}</li>
-    `).join('');
-
-            const languageIssues = (analysis.language_issues || []).map((issue, index) => `
-        <li>语言问题 ${index + 1}: ${issue}</li>
-    `).join('');
-
-            const priorityRecommendations = (analysis.priority_recommendations || []).map((rec, index) => `
-        <li>优先建议 ${index + 1}: ${rec}</li>
-    `).join('');
-
-            const suggestions = (analysis.suggestions || []).map((suggestion, index) => `
-        <li>建议 ${index + 1}: ${suggestion}</li>
-    `).join('');
-
-            const conventionIssues = (analysis.convention_issues || []).map((issue, index) => `
-        <li>约定问题 ${index + 1}: ${issue}</li>
-    `).join('');
-
-            const analysisHTML = `
-        <div class="analysis-section">
-            <div class="analysis-header">
-                <h3>📊 README 深度分析报告</h3>
-            </div>
-            <div class="analysis-content">
-                <div class="score-display">
-                    <div class="overall-score">${analysis.overall_score || 'N/A'}</div>
-                    <div class="score-label">综合评分 (满分100分)</div>
+                <div class="dimension-item">
+                    <div class="dimension-header">
+                        <span class="dimension-name">${dimension}</span>
+                        <span class="dimension-score">${score}/100</span>
+                    </div>
+                    <div class="dimension-bar">
+                        <div class="dimension-progress" style="width: ${Math.min(score, 100)}%"></div>
+                    </div>
                 </div>
+            `).join('');
 
-                <div class="section-title">📈 维度评分</div>
-                <div class="dimensions-grid">
-                    ${dimensionItems}
+            // 列表生成辅助函数
+            const createList = (items, label) => (items || []).map((item, index) => `
+                <div class="${label === '优先建议' || label === '困惑点' ? 'recommendation-item' : 'strength-item'}">
+                    <div class="icon">${index + 1}</div>
+                    <div class="item-content">
+                        <div class="item-description">${item}</div>
+                    </div>
                 </div>
+            `).join('');
 
-                <div class="section-title">📖 可读性指标</div>
-                <div class="info-grid">
-                    ${readabilityItems}
+            analysisContainer.innerHTML = `
+                ${ruleSummaryHtml}
+                
+                <div class="analysis-section">
+                    <div class="analysis-header">
+                        <h3>🤖 AI 深度评估报告</h3>
+                    </div>
+                    <div class="analysis-content">
+                        <div class="score-display">
+                            <div class="overall-score">${analysis.overall_score || 0}</div>
+                            <div class="score-label">总体健康评分</div>
+                        </div>
+                        
+                        <div class="dimensions-grid">
+                            ${dimensionItems}
+                        </div>
+                        
+                        <div class="strengths-section">
+                            <div class="section-title">✨ 项目亮点</div>
+                            <div class="strength-list">
+                                ${createList(analysis.strengths, '亮点')}
+                            </div>
+                        </div>
+                        
+                        ${analysis.missing_sections && analysis.missing_sections.length > 0 ? `
+                        <div class="recommendations-section">
+                            <div class="section-title">❌ 缺失文档/章节</div>
+                            <div class="recommendation-list">
+                                ${createList(analysis.missing_sections, '缺失')}
+                            </div>
+                        </div>` : ''}
+                        
+                         ${analysis.beginner_confusion_points && analysis.beginner_confusion_points.length > 0 ? `
+                        <div class="recommendations-section">
+                            <div class="section-title">🤔 新手困惑点</div>
+                            <div class="recommendation-list">
+                                ${createList(analysis.beginner_confusion_points, '困惑点')}
+                            </div>
+                        </div>` : ''}
+
+                        <div class="recommendations-section">
+                            <div class="section-title">🚀 优先改进建议</div>
+                            <div class="recommendation-list">
+                                ${createList(analysis.priority_recommendations, '优先建议')}
+                            </div>
+                        </div>
+                    </div>
                 </div>
+            `;
 
-                <div class="section-title">✅ 文档优点</div>
-                <ul>
-                    ${strengths || '<p>暂无优点数据</p>'}
-                </ul>
 
-                <div class="section-title">❌ 缺失部分</div>
-                <ul>
-                    ${missingSections || '<p>暂无缺失部分</p>'}
-                </ul>
-
-                <div class="section-title">🤔 新手困惑点</div>
-                <ul>
-                    ${beginnerConfusionPoints || '<p>暂无新手困惑点</p>'}
-                </ul>
-
-                <div class="section-title">🐞 代码质量问题</div>
-                <ul>
-                    ${codeQualityIssues || '<p>暂无代码质量问题</p>'}
-                </ul>
-
-                <div class="section-title">🏗️ 结构问题</div>
-                <ul>
-                    ${structuralIssues || '<p>暂无结构问题</p>'}
-                </ul>
-
-                <div class="section-title">📝 语言问题</div>
-                <ul>
-                    ${languageIssues || '<p>暂无语言问题</p>'}
-                </ul>
-
-                <div class="section-title">💡 优先建议</div>
-                <ul>
-                    ${priorityRecommendations || '<p>暂无优先建议</p>'}
-                </ul>
-
-                <div class="section-title">📌 其他建议</div>
-                <ul>
-                    ${suggestions || '<p>暂无其他建议</p>'}
-                </ul>
-
-                <div class="section-title">⚙️ 约定问题</div>
-                <ul>
-                    ${conventionIssues || '<p>暂无约定问题</p>'}
-                </ul>
-
-                <div class="analysis-actions">
-                    <button class="btn btn-secondary" onclick="location.reload()">
-                        🔄 分析新仓库
-                    </button>
-                </div>
-            </div>
-        </div>
-    `;
-
-            // 更新结果区域
-            resultDiv.innerHTML += analysisHTML;
-
-            // 添加动画效果
-            setTimeout(() => {
-                const progressBars = document.querySelectorAll('.dimension-progress');
-                progressBars.forEach(bar => {
-                    const width = bar.style.width;
-                    bar.style.width = '0';
-                    setTimeout(() => {
-                        bar.style.width = width;
-                    }, 100);
-                });
-            }, 500);
+            // Scroll to analysis
+            analysisContainer.scrollIntoView({ behavior: 'smooth' });
         }
 
         function showError(message) {
