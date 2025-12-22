@@ -1695,13 +1695,17 @@
 
                 // 保存分析数据供优化功能使用
                 window.analysisData = analysisData;
+                
+                // 保存选中的文档（只包含用户勾选的文档）
+                window.selectedDocs = analysisData.selected_docs || {};
+                console.log('保存选中的文档:', Object.keys(window.selectedDocs));
 
                 // 显示分析结果
                 showAnalysisResults(window.scannedData, analysisData.readability || {}, analysisData);
 
-                // 设置默认文档内容（README或第一个可用文档）
-                const availableDocs = Object.keys(window.scannedData.docs).filter(docType => {
-                    const doc = window.scannedData.docs[docType];
+                // 设置默认文档内容（README或第一个可用文档）- 只从选中的文档中选择
+                const availableDocs = Object.keys(window.selectedDocs).filter(docType => {
+                    const doc = window.selectedDocs[docType];
                     return doc && doc.content;
                 });
 
@@ -1775,21 +1779,21 @@
             repoInfo.description = repoInfo.description || '暂无仓库描述';
             repoInfo.language = repoInfo.language || '未指定';
 
-            // 准备数据
-            const analysis = analysisData || {};
+            // 准备数据 - 从 ai_analysis 中获取
+            const aiAnalysis = (analysisData && analysisData.ai_analysis) ? analysisData.ai_analysis : {};
             const readability = readabilityData || {};
 
             // 确保所有字段都存在
-            const strengths = analysis.strengths || ['文档结构清晰，便于阅读', '包含了必要的安装和使用说明'];
-            const missingSections = analysis.missing_sections || ['API文档', '贡献指南', '许可证信息'];
-            const beginnerConfusionPoints = analysis.beginner_confusion_points || ['缺少详细的配置说明', '示例代码注释不够详细'];
-            const codeQualityIssues = analysis.code_quality_issues || ['代码示例缺少错误处理', '缺少性能优化建议'];
-            const structuralIssues = analysis.structural_issues || ['目录结构不够清晰', '缺少快速开始部分'];
-            const languageIssues = analysis.language_issues || ['部分专业术语缺乏解释', '语言表达可以更简洁'];
-            const priorityRecommendations = analysis.priority_recommendations || ['增加详细的API文档', '完善故障排除部分'];
-            const suggestions = analysis.suggestions || ['添加更多代码示例', '优化文档结构'];
-            const conventionIssues = analysis.convention_issues || ['缺少标准的README模板部分', '格式不规范'];
-            const dimensionScores = analysis.dimension_scores || {
+            const strengths = aiAnalysis.strengths || ['文档结构清晰，便于阅读', '包含了必要的安装和使用说明'];
+            const missingSections = aiAnalysis.missing_sections || ['API文档', '贡献指南', '许可证信息'];
+            const beginnerConfusionPoints = aiAnalysis.beginner_confusion_points || ['缺少详细的配置说明', '示例代码注释不够详细'];
+            const codeQualityIssues = aiAnalysis.code_quality_issues || ['代码示例缺少错误处理', '缺少性能优化建议'];
+            const structuralIssues = aiAnalysis.structural_issues || ['目录结构不够清晰', '缺少快速开始部分'];
+            const languageIssues = aiAnalysis.language_issues || ['部分专业术语缺乏解释', '语言表达可以更简洁'];
+            const priorityRecommendations = aiAnalysis.priority_recommendations || ['增加详细的API文档', '完善故障排除部分'];
+            const suggestions = aiAnalysis.suggestions || ['添加更多代码示例', '优化文档结构'];
+            const conventionIssues = aiAnalysis.convention_issues || ['缺少标准的README模板部分', '格式不规范'];
+            const dimensionScores = aiAnalysis.dimension_scores || {
                 "结构完整性": 75,
                 "内容质量": 80,
                 "可读性": 85,
@@ -1798,7 +1802,7 @@
                 "维护性": 78,
                 "国际化": 60
             };
-            const overallScore = analysis.overall_score || 75;
+            const overallScore = aiAnalysis.overall_score || 75;
 
             // 生成HTML
             resultDiv.innerHTML = `
@@ -1898,14 +1902,14 @@
                         </div>
                     </div>
 
-                    <!-- 文档选择标签页 -->
+                    <!-- 文档选择标签页 - 只显示选中的文档 -->
                     <div style="margin-bottom: 20px; border-bottom: 1px solid #e0e0e0;">
                         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                            ${Object.keys(downloadData.docs).filter(docType => {
-                                const doc = downloadData.docs[docType];
+                            ${Object.keys(window.selectedDocs || {}).filter(docType => {
+                                const doc = window.selectedDocs[docType];
                                 return doc && doc.content;
                             }).map((docType, index) => {
-                                const doc = downloadData.docs[docType];
+                                const doc = window.selectedDocs[docType];
                                 const isActive = index === 0; // 第一个文档默认为激活状态
                                 return `
                                     <button class="doc-tab ${isActive ? 'active' : ''}" onclick="showDocumentContent('${docType}', event)">
@@ -2696,8 +2700,9 @@
         }
 
         async function optimizeSingleDocument() {
-            const availableDocs = Object.keys(window.scannedData.docs).filter(docType => {
-                const doc = window.scannedData.docs[docType];
+            // 只从选中的文档中选择
+            const availableDocs = Object.keys(window.selectedDocs || {}).filter(docType => {
+                const doc = window.selectedDocs[docType];
                 return doc && doc.content;
             });
 
@@ -2732,7 +2737,7 @@
                             </label>
                             <div style="display: grid; gap: 10px;">
                                 ${availableDocs.map(docType => {
-                                    const doc = window.scannedData.docs[docType];
+                                    const doc = window.selectedDocs[docType];
                                     return `
                                         <label class="doc-selection-item" style="display: flex; align-items: center; padding: 15px; border: 2px solid #e0e0e0; border-radius: 10px; cursor: pointer; transition: all 0.3s ease;">
                                             <input type="radio" name="selectedDoc" value="${docType}" style="margin-right: 15px;">
@@ -2814,7 +2819,7 @@
             }
 
             const docType = selectedRadio.value;
-            const doc = window.scannedData.docs[docType];
+            const doc = window.selectedDocs[docType];
 
             // 隐藏选择对话框
             hideDocumentSelectionDialog();
@@ -2845,7 +2850,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         original_content: doc.content,
-                        analysis_result: window.analysisData, // 使用全局分析结果
+                        analysis_result: window.analysisData.ai_analysis, // 只传递 ai_analysis 部分
                         doc_type: docType
                     })
                 });
@@ -2860,8 +2865,8 @@
                     throw new Error(result.error || "优化失败");
                 }
 
-                // 显示优化结果
-                showOptimizationResult(docType, doc.content, result.optimized_content, result.changes_summary);
+                // 显示优化结果（如果后端返回了 diff_html，则使用它）
+                showOptimizationResult(docType, doc.content, result.optimized_content, result.changes_summary, result.diff_html);
 
             } catch (error) {
                 console.error('优化失败:', error);
@@ -2879,8 +2884,9 @@
         }
 
         async function optimizeBatchDocuments() {
-            const availableDocs = Object.keys(window.scannedData.docs).filter(docType => {
-                const doc = window.scannedData.docs[docType];
+            // 只从选中的文档中选择
+            const availableDocs = Object.keys(window.selectedDocs || {}).filter(docType => {
+                const doc = window.selectedDocs[docType];
                 return doc && doc.content;
             });
 
@@ -2910,8 +2916,8 @@
             try {
                 const documents = availableDocs.map(docType => ({
                     doc_type: docType,
-                    original_content: window.scannedData.docs[docType].content,
-                    analysis_result: window.analysisData
+                    original_content: window.selectedDocs[docType].content,
+                    analysis_result: window.analysisData.ai_analysis  // 只传递 ai_analysis 部分
                 }));
 
                 const response = await fetch('http://localhost:8000/api/batch-optimize', {
@@ -2957,7 +2963,7 @@
             }
         }
 
-        function showOptimizationResult(docType, originalContent, optimizedContent, changesSummary) {
+        function showOptimizationResult(docType, originalContent, optimizedContent, changesSummary, diffHtml) {
             const resultDiv = document.getElementById('result');
 
             let changesHtml = '';
@@ -2980,6 +2986,47 @@
                 `;
             }
 
+            // 如果有 diff_html，使用它来显示差异对比（红绿色高亮）
+            const comparisonHtml = diffHtml ? `
+                <div style="margin-bottom: 30px;">
+                    <h3 style="margin-bottom: 15px; color: var(--dark);">
+                        <i class="fas fa-exchange-alt"></i> 内容差异对比
+                    </h3>
+                    <div style="max-height: 600px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 8px;">
+                        ${diffHtml}
+                    </div>
+                </div>
+            ` : `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px;">
+                    <div class="document-comparison">
+                        <div class="comparison-header">
+                            <h3 class="comparison-title original-title">
+                                <i class="fas fa-file-alt"></i> 原始文档
+                                <span class="doc-stats">${originalContent.length.toLocaleString()} 字符</span>
+                            </h3>
+                        </div>
+                        <div class="document-content original-content">
+                            <div class="markdown-content">
+                                ${marked.parse(originalContent.substring(0, 1500))}${originalContent.length > 1500 ? '<div class="content-truncate">... (内容过长，仅显示前1500字符)</div>' : ''}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="document-comparison">
+                        <div class="comparison-header">
+                            <h3 class="comparison-title optimized-title">
+                                <i class="fas fa-magic"></i> 优化后文档
+                                <span class="doc-stats">${optimizedContent.length.toLocaleString()} 字符</span>
+                            </h3>
+                        </div>
+                        <div class="document-content optimized-content">
+                            <div class="markdown-content">
+                                ${marked.parse(optimizedContent.substring(0, 1500))}${optimizedContent.length > 1500 ? '<div class="content-truncate">... (内容过长，仅显示前1500字符)</div>' : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
             resultDiv.innerHTML = `
                 <div class="analysis-card animate-in">
                     <div class="card-header">
@@ -2993,34 +3040,7 @@
                     </div>
 
                     <div style="padding: 25px;">
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px;">
-                            <div class="document-comparison">
-                                <div class="comparison-header">
-                                    <h3 class="comparison-title original-title">
-                                        <i class="fas fa-file-alt"></i> 原始文档
-                                        <span class="doc-stats">${originalContent.length.toLocaleString()} 字符</span>
-                                    </h3>
-                                </div>
-                                <div class="document-content original-content">
-                                    <div class="markdown-content">
-                                        ${marked.parse(originalContent.substring(0, 1500))}${originalContent.length > 1500 ? '<div class="content-truncate">... (内容过长，仅显示前1500字符)</div>' : ''}
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="document-comparison">
-                                <div class="comparison-header">
-                                    <h3 class="comparison-title optimized-title">
-                                        <i class="fas fa-magic"></i> 优化后文档
-                                        <span class="doc-stats">${optimizedContent.length.toLocaleString()} 字符</span>
-                                    </h3>
-                                </div>
-                                <div class="document-content optimized-content">
-                                    <div class="markdown-content">
-                                        ${marked.parse(optimizedContent.substring(0, 1500))}${optimizedContent.length > 1500 ? '<div class="content-truncate">... (内容过长，仅显示前1500字符)</div>' : ''}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        ${comparisonHtml}
 
                         ${changesHtml}
 
@@ -3044,7 +3064,7 @@
             let resultsHtml = results.map((result, index) => {
                 const diff = diffs[index];
                 const optimizedContent = result.optimized_content || result.content;
-                const originalContent = result.original_content || (window.scannedData && window.scannedData.docs && window.scannedData.docs[result.doc_type] ? window.scannedData.docs[result.doc_type].content : '暂无原始内容');
+                const originalContent = result.original_content || (window.selectedDocs && window.selectedDocs[result.doc_type] ? window.selectedDocs[result.doc_type].content : '暂无原始内容');
                 const displayContent = optimizedContent.substring(0, 1000) + (optimizedContent.length > 1000 ? '\n\n... (内容过长，仅显示前1000字符)' : '');
                 const originalDisplayContent = originalContent.substring(0, 1000) + (originalContent.length > 1000 ? '\n\n... (内容过长，仅显示前1000字符)' : '');
 
@@ -3077,44 +3097,50 @@
                                 </div>
                             </div>
 
-                            <!-- 差异视图 -->
+                            <!-- 差异视图 - 使用后端返回的 diff_html -->
                             <div id="diff-view-${result.doc_type}-${index}" style="display: block;">
                                 <h5 style="margin-top: 0; margin-bottom: 15px; color: #2c3e50;">
                                     <i class="fas fa-exchange-alt"></i> 内容对比
                                 </h5>
-                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                                    <div class="document-comparison">
-                                        <div class="comparison-header">
-                                            <h4 class="comparison-title original-title" style="font-size: 1rem; margin: 0; padding: 10px 15px;">
-                                                <i class="fas fa-file-alt"></i> 原始内容
-                                                <span class="doc-stats" style="font-size: 0.8rem;">${originalContent.length.toLocaleString()} 字符</span>
-                                            </h4>
+                                ${diff && diff.diff_html ? `
+                                    <div style="max-height: 500px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 8px;">
+                                        ${diff.diff_html}
+                                    </div>
+                                ` : `
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                                        <div class="document-comparison">
+                                            <div class="comparison-header">
+                                                <h4 class="comparison-title original-title" style="font-size: 1rem; margin: 0; padding: 10px 15px;">
+                                                    <i class="fas fa-file-alt"></i> 原始内容
+                                                    <span class="doc-stats" style="font-size: 0.8rem;">${originalContent.length.toLocaleString()} 字符</span>
+                                                </h4>
+                                            </div>
+                                            <div class="document-content original-content" style="max-height: 300px;">
+                                                <div class="markdown-content" style="padding: 15px;">
+                                                    ${marked.parse(originalDisplayContent)}
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div class="document-content original-content" style="max-height: 300px;">
-                                            <div class="markdown-content" style="padding: 15px;">
-                                                ${marked.parse(originalDisplayContent)}
+                                        <div class="document-comparison">
+                                            <div class="comparison-header">
+                                                <h4 class="comparison-title optimized-title" style="font-size: 1rem; margin: 0; padding: 10px 15px;">
+                                                    <i class="fas fa-magic"></i> 优化后内容
+                                                    <span class="doc-stats" style="font-size: 0.8rem;">${optimizedContent.length.toLocaleString()} 字符</span>
+                                                </h4>
+                                            </div>
+                                            <div class="document-content optimized-content" style="max-height: 300px;">
+                                                <div class="markdown-content" style="padding: 15px;">
+                                                    ${marked.parse(displayContent)}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="document-comparison">
-                                        <div class="comparison-header">
-                                            <h4 class="comparison-title optimized-title" style="font-size: 1rem; margin: 0; padding: 10px 15px;">
-                                                <i class="fas fa-magic"></i> 优化后内容
-                                                <span class="doc-stats" style="font-size: 0.8rem;">${optimizedContent.length.toLocaleString()} 字符</span>
-                                            </h4>
-                                        </div>
-                                        <div class="document-content optimized-content" style="max-height: 300px;">
-                                            <div class="markdown-content" style="padding: 15px;">
-                                                ${marked.parse(displayContent)}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                                `}
                                 <div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-radius: 5px; border-left: 4px solid #ffc107;">
                                     <strong>差异统计：</strong>
-                                    <span style="color: #27ae60; margin-left: 10px;"><i class="fas fa-plus"></i> 添加: ${diff.additions} 行</span>
-                                    <span style="color: #e74c3c; margin-left: 15px;"><i class="fas fa-minus"></i> 删除: ${diff.deletions} 行</span>
-                                    <span style="color: #f39c12; margin-left: 15px;"><i class="fas fa-edit"></i> 修改: ${diff.modifications} 行</span>
+                                    <span style="color: #27ae60; margin-left: 10px;"><i class="fas fa-plus"></i> 添加: ${diff ? (diff.additions || 0) : 0} 行</span>
+                                    <span style="color: #e74c3c; margin-left: 15px;"><i class="fas fa-minus"></i> 删除: ${diff ? (diff.deletions || 0) : 0} 行</span>
+                                    <span style="color: #f39c12; margin-left: 15px;"><i class="fas fa-edit"></i> 修改: ${diff ? (diff.modifications || 0) : 0} 行</span>
                                 </div>
                             </div>
                         </div>
@@ -3373,10 +3399,10 @@
                 }
             }
 
-            // 获取文档内容
-            const doc = window.scannedData.docs[docType];
+            // 获取文档内容 - 只从选中的文档中获取
+            const doc = window.selectedDocs && window.selectedDocs[docType] ? window.selectedDocs[docType] : null;
             if (!doc || !doc.content) {
-                document.getElementById('markdown-content').innerHTML = '<p style="color: #666; text-align: center;">文档内容不可用</p>';
+                document.getElementById('markdown-content').innerHTML = '<p style="color: #666; text-align: center;">文档内容不可用（该文档未被选中分析）</p>';
                 document.getElementById('document-stats').innerHTML = '';
                 document.getElementById('download-btn').style.display = 'none';
                 return;
