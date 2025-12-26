@@ -1681,10 +1681,42 @@
                 }
 
                 const analysisData = await analysisResponse.json();
+                
+                // 添加调试日志
+                console.log('分析响应数据:', analysisData);
+                console.log('响应状态:', analysisResponse.status);
+                console.log('success字段:', analysisData?.success);
+                console.log('是否有rule_checks:', !!analysisData?.rule_checks);
+                console.log('是否有readability:', !!analysisData?.readability);
+                console.log('是否有ai_analysis:', !!analysisData?.ai_analysis);
 
                 // 处理后端可能的错误或不完整数据
-                if (!analysisData || !analysisData.success) {
-                    throw new Error(analysisData?.error || "分析失败：后端返回无效数据");
+                // 如果响应有error字段，说明有错误
+                if (analysisData && analysisData.error) {
+                    throw new Error(analysisData.error);
+                }
+                
+                // 检查是否有实际的分析数据（即使没有success字段，只要有数据就认为成功）
+                if (!analysisData) {
+                    throw new Error("分析失败：后端返回空数据");
+                }
+                
+                // 如果明确标记为失败，则抛出错误
+                if (analysisData.success === false) {
+                    throw new Error(analysisData.error || "分析失败：后端返回失败状态");
+                }
+                
+                // 如果没有success字段，但也没有error字段，且有实际数据，则认为是成功的
+                // 这种情况可能是后端返回了数据但没有设置success字段
+                if (analysisData.success === undefined) {
+                    // 检查是否有任何分析数据
+                    const hasData = analysisData.rule_checks || analysisData.readability || analysisData.ai_analysis || analysisData.selected_docs;
+                    if (!hasData) {
+                        console.warn('警告：响应没有success字段，也没有分析数据');
+                        throw new Error("分析失败：后端返回无效数据（缺少分析结果）");
+                    } else {
+                        console.log('响应没有success字段，但检测到分析数据，继续处理');
+                    }
                 }
 
                 // 检查rule_checks数据完整性
@@ -1809,9 +1841,11 @@
             docTypes.forEach(docType => {
                 // 为每个文档生成独立评分（实际项目中，后端应该返回每个文档的评分）
                 const docScore = Math.floor(Math.random() * 20) + 70; // 模拟70-90之间的分数
-                docScores[docType] = {
-                    score: docScore,
-                    dimension_scores: aiAnalysis.dimension_scores[docType] || {
+                
+                // 安全地获取dimension_scores，避免undefined错误
+                const dimensionScores = (aiAnalysis.dimension_scores && aiAnalysis.dimension_scores[docType]) 
+                    ? aiAnalysis.dimension_scores[docType] 
+                    : {
                         "结构完整性": Math.floor(Math.random() * 20) + 70,
                         "内容质量": Math.floor(Math.random() * 20) + 70,
                         "可读性": Math.floor(Math.random() * 20) + 70,
@@ -1819,7 +1853,11 @@
                         "新手友好度": Math.floor(Math.random() * 20) + 70,
                         "维护性": Math.floor(Math.random() * 20) + 70,
                         "国际化": Math.floor(Math.random() * 20) + 60
-                    }
+                    };
+                
+                docScores[docType] = {
+                    score: docScore,
+                    dimension_scores: dimensionScores
                 };
                 totalScore += docScore;
                 docCount++;
@@ -2938,6 +2976,23 @@
 
         async function performDocumentOptimization(docType, doc) {
 
+            // 检查是否有分析数据
+            if (!window.analysisData) {
+                showEnhancedError("无法优化文档", [
+                    "请先进行文档分析",
+                    "点击\"开始深度分析\"按钮先分析文档"
+                ]);
+                return;
+            }
+
+            if (!window.analysisData.ai_analysis) {
+                showEnhancedError("缺少AI分析结果", [
+                    "分析数据不完整，无法进行优化",
+                    "请重新进行文档分析"
+                ]);
+                return;
+            }
+
             // 显示加载状态
             const analyzeBtn = document.getElementById('analyzeBtn');
             const loading = document.getElementById('loading');
@@ -2958,7 +3013,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         original_content: doc.content,
-                        analysis_result: window.analysisData.ai_analysis, // 只传递 ai_analysis 部分
+                        analysis_result: window.analysisData.ai_analysis || {}, // 只传递 ai_analysis 部分，提供默认值
                         doc_type: docType
                     })
                 });
@@ -2992,6 +3047,23 @@
         }
 
         async function optimizeBatchDocuments() {
+            // 检查是否有分析数据
+            if (!window.analysisData) {
+                showEnhancedError("无法优化文档", [
+                    "请先进行文档分析",
+                    "点击\"开始深度分析\"按钮先分析文档"
+                ]);
+                return;
+            }
+
+            if (!window.analysisData.ai_analysis) {
+                showEnhancedError("缺少AI分析结果", [
+                    "分析数据不完整，无法进行优化",
+                    "请重新进行文档分析"
+                ]);
+                return;
+            }
+
             // 只从选中的文档中选择
             const availableDocs = Object.keys(window.selectedDocs || {}).filter(docType => {
                 const doc = window.selectedDocs[docType];
@@ -3025,7 +3097,7 @@
                 const documents = availableDocs.map(docType => ({
                     doc_type: docType,
                     original_content: window.selectedDocs[docType].content,
-                    analysis_result: window.analysisData.ai_analysis  // 只传递 ai_analysis 部分
+                    analysis_result: window.analysisData.ai_analysis || {}  // 只传递 ai_analysis 部分，提供默认值
                 }));
 
                 const response = await fetch('http://localhost:8000/api/batch-optimize', {
